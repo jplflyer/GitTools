@@ -2,6 +2,7 @@
 
 #include <showlib/OptionHandler.h>
 #include <showlib/Ranges.h>
+#include <showlib/StringUtils.h>
 
 #include "Server.h"
 
@@ -23,7 +24,7 @@ void getRepositories(Server &server);
 void getTeams(Server &server, const std::string &orgName);
 void getUsers(Server &server, const std::string &orgName);
 
-void addAdmin(Server &server, const std::string &orgName, const std::string &repoName, const std::string &login);
+void addAdmin(Server &server, const std::string &orgName, const ShowLib::StringVector & repoNames, const std::string &login);
 
 
 int main(int argc, char **argv) {
@@ -32,14 +33,14 @@ int main(int argc, char **argv) {
     Server server;
     string orgName;
     string loginName;
-    string repoName;
+    ShowLib::StringVector repoNames;
 
     args.addArg("host", [&](const char *value){ server.hostname = value; }, "github.com", "Specify a server");
     args.addArg("username", [&](const char *value){ server.username = value; }, "foofoo", "Specify your username");
     args.addArg("token", [&](const char *value){ server.apiToken = value; }, "12345", "Your API Token");
 
     args.addArg("login", [&](const char *value){ loginName = value; }, "foo", "Another user");
-    args.addArg("repo", [&](const char *value){ repoName = value; }, "Foo", "Repository name (without owner)");
+    args.addArg("repo", [&](const char *value){ repoNames.add(ShowLib::trim(value)); }, "Foo", "Repository name (without owner)");
 
     args.addNoArg("add-admin", [&](const char *){ action = Action::AddAdmin; }, "Add an admin to a repo");
     args.addNoArg("repos", [&](const char *){ action = Action::GetRepos; }, "Retrieve repositories");
@@ -62,7 +63,7 @@ int main(int argc, char **argv) {
         case Action::GetRepos: getRepositories(server); break;
         case Action::GetTeams: getTeams(server, orgName); break;
         case Action::GetUsers: getUsers(server, orgName); break;
-        case Action::AddAdmin: addAdmin(server, orgName, repoName, loginName); break;
+        case Action::AddAdmin: addAdmin(server, orgName, repoNames, loginName); break;
     }
 }
 
@@ -91,32 +92,42 @@ void getUsers(Server &server, const string &orgName) {
     server.getUsers(users, orgName);
     cout << "Number of users: " << users.size() << endl;
     for (const User::Pointer & user: users) {
-        cout << "User Login: " << user->login << endl;
+        cout << "User Login: " << user->login;
+        if (user->name.size() > 0) {
+            cout << " (" << user->name << ")";
+        }
+        if (user->email.size() > 0) {
+            cout << " -- " << user->email;
+        }
+        cout << endl;
     }
 }
 
 /**
  * Give this user admin access to this repo.
  */
-void addAdmin(Server &server, const std::string &orgName, const std::string &repoName, const std::string &login) {
-    /*
+void addAdmin(Server &server, const std::string &orgName, const ShowLib::StringVector & repoNames, const std::string &login) {
     Repository::Vector repos;
     User::Vector users;
     server.getRepositories(repos);
     server.getUsers(users, orgName);
 
-    Repository::Pointer repo = repos.findIf( [=](const Repository::Pointer & ptr) { return ptr->name == repoName; } );
-    User::Pointer user = users.findIf( [=](const User::Pointer & ptr) { return ptr->login == login; } );
+    for (const std::shared_ptr<string> &nPtr: repoNames) {
+        string repoName = ShowLib::toLower(*nPtr);
+        Repository::Pointer repo = repos.findIf( [=](const Repository::Pointer & ptr) {
+            return ShowLib::toLower(ptr->name) == repoName;
+        } );
+        User::Pointer user = users.findIf( [=](const User::Pointer & ptr) { return ptr->login == login; } );
 
-    if (repo == nullptr) {
-        cout << "Repo " << repoName << " not found." << endl;
-        return;
-    }
-    if (user == nullptr) {
-        cout << "User " << login << " not found." << endl;
-        return;
-    }
-    */
+        if (repo == nullptr) {
+            cout << "Repo " << repoName << " not found." << endl;
+            continue;
+        }
+        if (user == nullptr) {
+            cout << "User " << login << " not found." << endl;
+            continue;
+        }
 
-    server.addAdmin(orgName, repoName, login);
+        server.addAdmin(orgName, repo->name, login);
+    }
 }
