@@ -82,10 +82,13 @@ ${BINDIR}/GitTool: ${OBJDIR}/GitTool.o ${LIB}
 # Installation.
 #======================================================================
 .PHONY: install
-install: ${LIB} install_includes
+install: ${LIB} install_includes /usr/local/bin/GitTool
 	cp -p ${LIB} ${INSTALL_BASE}/lib
 
 .PHONY: install_includes
 install_includes:
 	@mkdir -p ${INSTALL_BASE}/include/gittools
 	cp -p ${SRCDIR}/*.h ${INSTALL_BASE}/include/gittools
+
+/usr/local/bin/GitTool: ${BINDIR}/GitTool
+	cp ${BINDIR}/GitTool /usr/local/bin

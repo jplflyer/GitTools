@@ -14,60 +14,85 @@ using namespace GitTools;
 
 enum class Action {
     Unknown,
-    AddAdmin,
+    AddUser,
     GetRepos,
     GetTeams,
     GetUsers
 };
 
-void getRepositories(Server &server);
-void getTeams(Server &server, const std::string &orgName);
-void getUsers(Server &server, const std::string &orgName);
+class GitTool {
+public:
+    void processArgs(int, char **);
+    void run();
 
-void addAdmin(Server &server, const std::string &orgName, const ShowLib::StringVector & repoNames, const std::string &login);
+    void getRepositories();
+    void getTeams();
+    void getUsers();
+    void addUser();
 
-
-int main(int argc, char **argv) {
-    ShowLib::OptionHandler::ArgumentVector args;
     Action action = Action::Unknown;
     Server server;
     string orgName;
-    string loginName;
     ShowLib::StringVector repoNames;
+    ShowLib::StringVector loginNames;
+
+    std::string permName;
+    bool checkForUsers = true;
+};
+
+/**
+ * Entry point.
+ */
+int main(int argc, char **argv) {
+    GitTool tool;
+
+    tool.processArgs(argc, argv);
+    tool.run();
+}
+
+void GitTool::processArgs(int argc, char ** argv) {
+    ShowLib::OptionHandler::ArgumentVector args;
 
     args.addArg("host", [&](const char *value){ server.hostname = value; }, "github.com", "Specify a server");
     args.addArg("username", [&](const char *value){ server.username = value; }, "foofoo", "Specify your username");
     args.addArg("token", [&](const char *value){ server.apiToken = value; }, "12345", "Your API Token");
 
-    args.addArg("login", [&](const char *value){ loginName = value; }, "foo", "Another user");
+    args.addArg("login", [&](const char *value){ loginNames.add(value); }, "foo", "A user to add to a repo");
     args.addArg("repo", [&](const char *value){ repoNames.add(ShowLib::trim(value)); }, "Foo", "Repository name (without owner)");
 
-    args.addNoArg("add-admin", [&](const char *){ action = Action::AddAdmin; }, "Add an admin to a repo");
+    args.addNoArg("add-admin", [&](const char *){ action = Action::AddUser; permName = "admin"; }, "Add an admin to a repo");
+    args.addNoArg("add-writer", [&](const char *){ action = Action::AddUser; permName = "push"; }, "Add a writer to a repo");
     args.addNoArg("repos", [&](const char *){ action = Action::GetRepos; }, "Retrieve repositories");
     args.addNoArg("teams", [&](const char *){ action = Action::GetTeams; }, "Retrieve teams");
     args.addNoArg("users", [&](const char *){ action = Action::GetUsers; }, "Retrieve users");
 
+    args.addNoArg("no-usercheck", [&](const char *){ checkForUsers = false; }, "Don't validate the loginNames given.");
+
     args.addArg("org", [&](const char *value){ orgName = value; }, "foofoo", "Use this organization");
 
     if (!ShowLib::OptionHandler::handleOptions(argc, argv, args)) {
-        return 0;
+        exit(0);
     }
 
     if (server.username.empty() || server.apiToken.empty()) {
         cerr << "No authentication may be a problem." << endl;
     }
+}
 
+void GitTool::run() {
     switch (action) {
-        case Action::Unknown: cerr << "Please specify one of [repos]" << endl; return 0;
+        case Action::Unknown: cerr << "Please specify one of [repos]" << endl; break;
 
-        case Action::GetRepos: getRepositories(server); break;
-        case Action::GetTeams: getTeams(server, orgName); break;
-        case Action::GetUsers: getUsers(server, orgName); break;
-        case Action::AddAdmin: addAdmin(server, orgName, repoNames, loginName); break;
+        case Action::GetRepos: getRepositories(); break;
+        case Action::GetTeams: getTeams(); break;
+        case Action::GetUsers: getUsers(); break;
+        case Action::AddUser: addUser(); break;
+
+        default: cout << "Unknown action." << endl; break;
     }
 }
 
-void getRepositories(Server &server) {
+void GitTool::getRepositories() {
     Repository::Vector repos;
     server.getRepositories(repos);
     cout << "Number of repos: " << repos.size() << endl;
@@ -76,7 +101,7 @@ void getRepositories(Server &server) {
     }
 }
 
-void getTeams(Server &server, const string &orgName) {
+void GitTool::getTeams() {
     Team::Vector teams;
     server.getTeams(teams, orgName);
     cout << "Number of teams: " << teams.size() << endl;
@@ -87,7 +112,7 @@ void getTeams(Server &server, const string &orgName) {
 
 
 
-void getUsers(Server &server, const string &orgName) {
+void GitTool::getUsers() {
     User::Vector users;
     server.getUsers(users, orgName);
     cout << "Number of users: " << users.size() << endl;
@@ -106,28 +131,40 @@ void getUsers(Server &server, const string &orgName) {
 /**
  * Give this user admin access to this repo.
  */
-void addAdmin(Server &server, const std::string &orgName, const ShowLib::StringVector & repoNames, const std::string &login) {
+void GitTool::addUser() {
+    cout << "Add User..." << endl;
+
     Repository::Vector repos;
     User::Vector users;
     server.getRepositories(repos);
-    server.getUsers(users, orgName);
+
+    if (checkForUsers) {
+        server.getUsers(users, orgName);
+    }
 
     for (const std::shared_ptr<string> &nPtr: repoNames) {
         string repoName = ShowLib::toLower(*nPtr);
         Repository::Pointer repo = repos.findIf( [=](const Repository::Pointer & ptr) {
             return ShowLib::toLower(ptr->name) == repoName;
         } );
-        User::Pointer user = users.findIf( [=](const User::Pointer & ptr) { return ptr->login == login; } );
 
         if (repo == nullptr) {
             cout << "Repo " << repoName << " not found." << endl;
             continue;
         }
-        if (user == nullptr) {
-            cout << "User " << login << " not found." << endl;
-            continue;
-        }
 
-        server.addAdmin(orgName, repo->name, login);
+        for (const std::shared_ptr<string> & uPtr: loginNames) {
+            string login = *uPtr;
+
+            if (checkForUsers) {
+                User::Pointer user = users.findIf( [=](const User::Pointer & ptr) { return ptr->login == login; } );
+                if (user == nullptr) {
+                    cout << "User " << login << " not found." << endl;
+                    continue;
+                }
+            }
+
+            server.addUserToRepo(orgName, repo->name, login, permName);
+        }
     }
 }

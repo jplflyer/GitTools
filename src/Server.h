@@ -24,7 +24,7 @@ public:
     void getTeams(Team::Vector &vec, const std::string &orgName);
     void getUsers(User::Vector &vec, const std::string &orgName);
 
-    void addAdmin(const std::string &orgName, const std::string & repoName, const std::string & userName);
+    void addUserToRepo(const std::string &orgName, const std::string & repoName, const std::string & userName, const std::string &perm);
 
     std::string		hostname;
     std::string		username;

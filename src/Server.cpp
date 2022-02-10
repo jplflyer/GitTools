@@ -108,13 +108,18 @@ Server::getUsers(User::Vector &vec, const std::string &orgName) {
  * curl -X PUT -d '{"permission": "admin"}' -s -u "$GITHUB_USER:$GITHUB_TOKEN"
  * 	 "https://api.github.com/repos/verbit-ai/CT-Agents/collaborators/vitac-brentn"
  */
-void Server::addAdmin(const std::string &orgName, const std::string & repoName, const std::string & login) {
+void Server::addUserToRepo(
+        const std::string &orgName,
+        const std::string & repoName,
+        const std::string & login,
+        const std::string & permName )
+{
     ensureHeaders();
 
     string url = "/repos/" + orgName + "/" + repoName + "/collaborators/" + login;
 
     JSON json = JSON::object();
-    json["permission"] = "admin";
+    json["permission"] = permName;
 
     client.put(url, json);
 }
