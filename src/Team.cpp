@@ -24,7 +24,9 @@ void Team::fromJSON(const JSON &json)
 /**
  *
  */
-JSON & Team::toJSON(JSON &json) const {
+JSON Team::toJSON() const {
+    JSON json = JSON::object();
+
     json["node_id"] = node_id;
     json["url"] = url;
     json["html_url"] = html_url;

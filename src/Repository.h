@@ -37,7 +37,7 @@ public:
         bool siteAdmin;
 
         void fromJSON(const JSON &) override;
-        JSON &toJSON(JSON &) const override;
+        JSON toJSON() const override;
     };
 
     class Permissions: public ShowLib::JSONSerializable
@@ -48,7 +48,7 @@ public:
         bool pull;
 
         void fromJSON(const JSON &) override;
-        JSON &toJSON(JSON &) const override;
+        JSON toJSON() const override;
     };
 
     //======================================================================
@@ -57,7 +57,7 @@ public:
     Repository();
 
     void fromJSON(const JSON &) override;
-    JSON &toJSON(JSON &) const override;
+    JSON toJSON() const override;
 
     //======================================================================
     // Fields.

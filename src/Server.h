@@ -20,9 +20,9 @@ class GitTools::Server
 public:
     Server();
 
-    void getRepositories(Repository::Vector &vec);
-    void getTeams(Team::Vector &vec, const std::string &orgName);
-    void getUsers(User::Vector &vec, const std::string &orgName);
+    Repository::Vector getRepositories();
+    Team::Vector getTeams(const std::string &orgName);
+    User::Vector getUsers(const std::string &orgName);
 
     void addUserToRepo(const std::string &orgName, const std::string & repoName, const std::string & userName, const std::string &perm);
 

@@ -1,5 +1,6 @@
 #include <iostream>
 
+#include <showlib/JSONSerializable.h>
 #include <showlib/StringUtils.h>
 
 #include "Server.h"
@@ -18,7 +19,7 @@ Server::Server() {
     apiToken = ShowLib::getEnv("GIT_TOKEN");
 
     client.setHost( string{"https://"} + hostname);
-    client.setStandardHeader("Accept", "application/json");
+    client.setStandardHeader("Accept", "application/vnd.github+json");
     client.setStandardHeader("User-Agent", "curl/7.54.1");
 }
 
@@ -32,8 +33,9 @@ void Server::ensureHeaders() {
 /**
  * Retrieve repos for the authenticated user.
  */
-void
-Server::getRepositories(Repository::Vector &vec) {
+Repository::Vector
+Server::getRepositories() {
+    Repository::Vector vec;
     ensureHeaders();
 
     string url = "/user/repos?per_page=100";
@@ -52,13 +54,15 @@ Server::getRepositories(Repository::Vector &vec) {
 
         vec.fromJSON(json);
     }
+    return vec;
 }
 
 /**
  * Retrieve teams for the named org.
  */
-void
-Server::getTeams(Team::Vector &vec, const std::string &orgName) {
+Team::Vector
+Server::getTeams( const std::string &orgName) {
+    Team::Vector vec;
     ensureHeaders();
 
     string url = "/orgs/" + orgName + "/teams?per_page=100";
@@ -77,13 +81,16 @@ Server::getTeams(Team::Vector &vec, const std::string &orgName) {
 
         vec.fromJSON(json);
     }
+
+    return vec;
 }
 
 /**
  * Retrieve users for the named org.
  */
-void
-Server::getUsers(User::Vector &vec, const std::string &orgName) {
+User::Vector
+Server::getUsers(const std::string &orgName) {
+    User::Vector vec;
     ensureHeaders();
 
     string url = "/orgs/" + orgName + "/members?per_page=100";
@@ -102,6 +109,8 @@ Server::getUsers(User::Vector &vec, const std::string &orgName) {
 
         vec.fromJSON(json);
     }
+
+    return vec;
 }
 
 /**

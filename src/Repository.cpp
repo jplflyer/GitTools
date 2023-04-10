@@ -89,18 +89,12 @@ void Repository::fromJSON(const JSON &json) {
     disabled = boolValue(json, "disabled");
 }
 
-JSON & Repository::toJSON(JSON & json) const {
-    JSON ownerJSON = JSON::object();
-    JSON permJSON = JSON::object();
-    JSON topicsArray = JSON::array();
+JSON Repository::toJSON() const {
+    JSON json = JSON::object();
 
-    owner.toJSON(ownerJSON);
-    permissions.toJSON(permJSON);
-    topics.toJSON(topicsArray);
-
-    json["owner"] = ownerJSON;
-    json["permissions"] = permJSON;
-    json["topics"] = topicsArray;
+    json["owner"] =  owner.toJSON();
+    json["permissions"] =  permissions.toJSON();
+    json["topics"] =  topics.toJSON();
 
     json[ "node_id" ] = nodeId;
     json[ "name" ] = name;
@@ -199,7 +193,9 @@ void Repository::Owner::fromJSON(const JSON &json) {
     siteAdmin = boolValue(json, "site_admin");
 }
 
-JSON & Repository::Owner::toJSON(JSON & json) const {
+JSON Repository::Owner::toJSON() const {
+    JSON json = JSON::object();
+
     json[ "login" ] = login;
     json[ "node_id" ] = nodeId;
     json[ "avatar_url" ] = avatarURL;
@@ -228,7 +224,9 @@ void Repository::Permissions::fromJSON(const JSON &json) {
     pull = boolValue(json, "pull");
 }
 
-JSON & Repository::Permissions::toJSON(JSON & json) const {
+JSON Repository::Permissions::toJSON() const {
+    JSON json = JSON::object();
+
     json["admin"] = admin;
     json["push"] = push;
     json["pull"] = pull;

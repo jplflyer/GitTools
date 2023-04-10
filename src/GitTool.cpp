@@ -17,7 +17,8 @@ enum class Action {
     AddUser,
     GetRepos,
     GetTeams,
-    GetUsers
+    GetUsers,
+    CheckBranchProtection
 };
 
 class GitTool {
@@ -30,9 +31,12 @@ public:
     void getUsers();
     void addUser();
 
+    void checkBranchProtection();
+
     Action action = Action::Unknown;
     Server server;
     string orgName;
+    string repoName;
     ShowLib::StringVector repoNames;
     ShowLib::StringVector loginNames;
 
@@ -68,7 +72,9 @@ void GitTool::processArgs(int argc, char ** argv) {
 
     args.addNoArg("no-usercheck", [&](const char *){ checkForUsers = false; }, "Don't validate the loginNames given.");
 
-    args.addArg("org", [&](const char *value){ orgName = value; }, "foofoo", "Use this organization");
+    args.addArg("org", [&](const char *value){ orgName = value; }, "foofoo", "Use this organization (used by users/teams calls)");
+
+    args.addArg("check-branch-protection", [&](const char *value){ action = Action::CheckBranchProtection; repoName = value; }, "Repo", "Display branch protection on main for this repo.");
 
     if (!ShowLib::OptionHandler::handleOptions(argc, argv, args)) {
         exit(0);
@@ -88,13 +94,14 @@ void GitTool::run() {
         case Action::GetUsers: getUsers(); break;
         case Action::AddUser: addUser(); break;
 
+        case Action::CheckBranchProtection: checkBranchProtection(); break;
+
         default: cout << "Unknown action." << endl; break;
     }
 }
 
 void GitTool::getRepositories() {
-    Repository::Vector repos;
-    server.getRepositories(repos);
+    Repository::Vector repos = server.getRepositories();
     cout << "Number of repos: " << repos.size() << endl;
     for (const Repository::Pointer & repo: repos) {
         cout << "Repo: " << repo->name << " -- " << repo->url << endl;
@@ -102,8 +109,7 @@ void GitTool::getRepositories() {
 }
 
 void GitTool::getTeams() {
-    Team::Vector teams;
-    server.getTeams(teams, orgName);
+    Team::Vector teams = server.getTeams(orgName);
     cout << "Number of teams: " << teams.size() << endl;
     for (const Team::Pointer & team: teams) {
         cout << "Team: " << team->name << " -- " << team->url << endl;
@@ -113,8 +119,7 @@ void GitTool::getTeams() {
 
 
 void GitTool::getUsers() {
-    User::Vector users;
-    server.getUsers(users, orgName);
+    User::Vector users = server.getUsers(orgName);
     cout << "Number of users: " << users.size() << endl;
     for (const User::Pointer & user: users) {
         cout << "User Login: " << user->login;
@@ -167,4 +172,7 @@ void GitTool::addUser() {
             server.addUserToRepo(orgName, repo->name, login, permName);
         }
     }
+}
+
+void GitTool::checkBranchProtection() {
 }

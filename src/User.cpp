@@ -53,7 +53,9 @@ void User::fromJSON(const JSON &json) {
 
 }
 
-JSON & User::toJSON(JSON &json) const {
+JSON User::toJSON() const {
+    JSON json = JSON::object();
+
     json["avatar_url"] = avatar_url;
     json["bio"] = bio;
     json["blog"] = blog;

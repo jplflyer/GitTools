@@ -14,8 +14,8 @@ public:
     typedef std::shared_ptr<Team> Pointer;
     typedef ShowLib::JSONSerializableVector<Team> Vector;
 
-    void fromJSON(const JSON &);
-    JSON &toJSON(JSON &) const;
+    void fromJSON(const JSON &) override;
+    JSON toJSON() const override;
 
     std::string node_id;
     std::string url;

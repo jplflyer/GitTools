@@ -13,7 +13,7 @@ public:
     typedef ShowLib::JSONSerializableVector<User> Vector;
 
     void fromJSON(const JSON &);
-    JSON &toJSON(JSON &) const;
+    JSON toJSON() const;
 
     std::string avatar_url;
     std::string bio;
