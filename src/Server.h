@@ -4,6 +4,7 @@
 
 #include <showlib/RESTClient.h>
 
+#include "BranchProtection.h"
 #include "Repository.h"
 #include "Team.h"
 #include "User.h"
@@ -23,6 +24,8 @@ public:
     Repository::Vector getRepositories();
     Team::Vector getTeams(const std::string &orgName);
     User::Vector getUsers(const std::string &orgName);
+
+    BranchProtection getProtection(const std::string &orgName, const std::string repoName, const std::string &branchName);
 
     void addUserToRepo(const std::string &orgName, const std::string & repoName, const std::string & userName, const std::string &perm);
 

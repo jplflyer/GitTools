@@ -1,3 +1,10 @@
+//======================================================================
+// When using this program, you can use these environment variables:
+//
+//		GIT_HOST	(default is probably fine)
+//		GIT_USER	(default of "git" is probably fine)
+//		GIT_TOKEN	This is your personal API token.
+//======================================================================
 #include <iostream>
 
 #include <showlib/OptionHandler.h>
@@ -37,6 +44,7 @@ public:
     Server server;
     string orgName;
     string repoName;
+    string branchName = "main";
     ShowLib::StringVector repoNames;
     ShowLib::StringVector loginNames;
 
@@ -61,8 +69,9 @@ void GitTool::processArgs(int argc, char ** argv) {
     args.addArg("username", [&](const char *value){ server.username = value; }, "foofoo", "Specify your username");
     args.addArg("token", [&](const char *value){ server.apiToken = value; }, "12345", "Your API Token");
 
-    args.addArg("login", [&](const char *value){ loginNames.add(value); }, "foo", "A user to add to a repo");
-    args.addArg("repo", [&](const char *value){ repoNames.add(ShowLib::trim(value)); }, "Foo", "Repository name (without owner)");
+    args.addArg("login",  [&](const char *value){ loginNames.add(value); },               "foo",  "A user to add to a repo");
+    args.addArg("repo",   [&](const char *value){ repoNames.add(ShowLib::trim(value)); }, "Foo",  "A repository name (without owner)");
+    args.addArg("branch", [&](const char *value){ branchName = value; },                  "main", "The branch name");
 
     args.addNoArg("add-admin", [&](const char *){ action = Action::AddUser; permName = "admin"; }, "Add an admin to a repo");
     args.addNoArg("add-writer", [&](const char *){ action = Action::AddUser; permName = "push"; }, "Add a writer to a repo");
@@ -139,12 +148,11 @@ void GitTool::getUsers() {
 void GitTool::addUser() {
     cout << "Add User..." << endl;
 
-    Repository::Vector repos;
+    Repository::Vector repos = server.getRepositories();
     User::Vector users;
-    server.getRepositories(repos);
 
     if (checkForUsers) {
-        server.getUsers(users, orgName);
+        users = server.getUsers(orgName);
     }
 
     for (const std::shared_ptr<string> &nPtr: repoNames) {
@@ -174,5 +182,15 @@ void GitTool::addUser() {
     }
 }
 
+/**
+ * We're going to retrieve the branch protection information for this repo.
+ */
 void GitTool::checkBranchProtection() {
+    BranchProtection bp = server.getProtection(orgName, repoName, branchName);
+    if ( !bp.getEnabled() ) {
+        cout << "Protection not enabled.\n";
+    }
+    else {
+        cout << "Protection:\n" << bp.toJSON().dump(2) << endl;
+    }
 }

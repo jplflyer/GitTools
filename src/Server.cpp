@@ -15,7 +15,7 @@ using namespace GitTools;
  */
 Server::Server() {
     hostname = ShowLib::getEnv("GIT_HOST", "api.github.com");
-    username = ShowLib::getEnv("GIT_USER");
+    username = ShowLib::getEnv("GIT_USER", "git");
     apiToken = ShowLib::getEnv("GIT_TOKEN");
 
     client.setHost( string{"https://"} + hostname);
@@ -133,3 +133,17 @@ void Server::addUserToRepo(
     client.put(url, json);
 }
 
+/**
+ * /repos/{owner}/{repo}/branches/{branch}/protection
+ */
+BranchProtection Server::getProtection(const std::string &orgName, const std::string repoName, const std::string &branchName) {
+    string url = "/repos/" + orgName + "/" + repoName + "/branches/" + branchName + "/protection";
+    BranchProtection bp;
+
+    ensureHeaders();
+
+    JSON json = client.get(url);
+    bp.fromJSON(json);
+
+    return bp;
+}
