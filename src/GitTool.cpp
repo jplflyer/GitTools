@@ -5,6 +5,7 @@
 //		GIT_USER	(default of "git" is probably fine)
 //		GIT_TOKEN	This is your personal API token.
 //======================================================================
+#include <iomanip>
 #include <iostream>
 
 #include <showlib/OptionHandler.h>
@@ -25,7 +26,18 @@ enum class Action {
     GetRepos,
     GetTeams,
     GetUsers,
-    CheckBranchProtection
+    CheckBranchProtection,
+    AddBranchProtection,
+    DeleteBranchProtection
+};
+
+enum class Option {
+    EnforceAdmins_Set,
+    EnforceAdmins_Clear,
+    Allow_Delete_Set,
+    Allow_Delete_Clear,
+    Require_PullRequests_Set,
+    Require_PullRequests_Clear
 };
 
 class GitTool {
@@ -39,16 +51,20 @@ public:
     void addUser();
 
     void checkBranchProtection();
+    void addBranchProtection();
+    void deleteBranchProtection();
 
     Action action = Action::Unknown;
     Server server;
-    string orgName;
-    string repoName;
-    string branchName = "main";
+    Server::OwnerName orgName;
+    Server::RepositoryName repoName;
+    Server::BranchName branchName = Server::BranchName("main");
     ShowLib::StringVector repoNames;
     ShowLib::StringVector loginNames;
 
-    std::string permName;
+    std::vector<Option> options;
+
+    Server::PermissionName permName;
     bool checkForUsers = true;
 };
 
@@ -56,6 +72,7 @@ public:
  * Entry point.
  */
 int main(int argc, char **argv) {
+    cout << std::boolalpha;
     GitTool tool;
 
     tool.processArgs(argc, argv);
@@ -69,21 +86,33 @@ void GitTool::processArgs(int argc, char ** argv) {
     args.addArg("username", [&](const char *value){ server.username = value; }, "foofoo", "Specify your username");
     args.addArg("token", [&](const char *value){ server.apiToken = value; }, "12345", "Your API Token");
 
-    args.addArg("login",  [&](const char *value){ loginNames.add(value); },               "foo",  "A user to add to a repo");
-    args.addArg("repo",   [&](const char *value){ repoNames.add(ShowLib::trim(value)); }, "Foo",  "A repository name (without owner)");
-    args.addArg("branch", [&](const char *value){ branchName = value; },                  "main", "The branch name");
+    args.addArg("login",  [&](const char *value){ loginNames.add(value); },                  "foo",  "A user to add to a repo");
+    args.addArg("repo",   [&](const char *value){ repoNames.add(ShowLib::trim(value)); },    "Foo",  "A repository name (without owner)");
+    args.addArg("branch", [&](const char *value){ branchName = Server::BranchName(value); }, "main", "The branch name");
 
-    args.addNoArg("add-admin", [&](const char *){ action = Action::AddUser; permName = "admin"; }, "Add an admin to a repo");
-    args.addNoArg("add-writer", [&](const char *){ action = Action::AddUser; permName = "push"; }, "Add a writer to a repo");
+    args.addNoArg("add-admin", [&](const char *){ action = Action::AddUser; permName = Server::PermissionName("admin"); }, "Add an admin to a repo");
+    args.addNoArg("add-writer", [&](const char *){ action = Action::AddUser; permName = Server::PermissionName("push"); }, "Add a writer to a repo");
     args.addNoArg("repos", [&](const char *){ action = Action::GetRepos; }, "Retrieve repositories");
     args.addNoArg("teams", [&](const char *){ action = Action::GetTeams; }, "Retrieve teams");
     args.addNoArg("users", [&](const char *){ action = Action::GetUsers; }, "Retrieve users");
 
     args.addNoArg("no-usercheck", [&](const char *){ checkForUsers = false; }, "Don't validate the loginNames given.");
 
-    args.addArg("org", [&](const char *value){ orgName = value; }, "foofoo", "Use this organization (used by users/teams calls)");
+    args.addArg("org", [&](const char *value){ orgName = Server::OwnerName(value); }, "foofoo", "Use this organization (used by users/teams calls)");
 
-    args.addArg("check-branch-protection", [&](const char *value){ action = Action::CheckBranchProtection; repoName = value; }, "Repo", "Display branch protection on main for this repo.");
+    args.addArg("check-branch-protection", [&](const char *value){ action = Action::CheckBranchProtection; repoName = Server::RepositoryName(value); }, "repo", "Display branch protection. See --branch");
+    args.addArg("delete-branch-protection", [&](const char *value){ action = Action::DeleteBranchProtection; repoName = Server::RepositoryName(value); }, "repo", "Delete branch protection. See --branch");
+    args.addArg("add-branch-protection", [&](const char *value){ action = Action::AddBranchProtection; repoName = Server::RepositoryName(value); }, "repo", "Add branch protection. See --branch and other options below.");
+
+    // These flags are for add-branch-protection
+    args.addNoArg("enforce-admins",    [&](const char *) { options.push_back(Option::EnforceAdmins_Set); },   "For add-branch-protection: admins cannot bypass the other flags.");
+    args.addNoArg("no-enforce-admins", [&](const char *) { options.push_back(Option::EnforceAdmins_Clear); }, "For add-branch-protection: admins can bypass the other flags.");
+
+    args.addNoArg("allow-delete",      [&](const char *) { options.push_back(Option::Allow_Delete_Clear); }, "For add-branch-protection: allow_deletions == true.");
+    args.addNoArg("no-allow-delete",   [&](const char *) { options.push_back(Option::Allow_Delete_Set); },   "For add-branch-protection: allow_deletions == false.");
+
+    args.addNoArg("pull-requests",     [&](const char *) { options.push_back(Option::Require_PullRequests_Set); },   "For add-branch-protection: Require pull requests before merging");
+    args.addNoArg("no-pull-requests",  [&](const char *) { options.push_back(Option::Require_PullRequests_Clear); }, "For add-branch-protection: Do not require pull requests before merging");
 
     if (!ShowLib::OptionHandler::handleOptions(argc, argv, args)) {
         exit(0);
@@ -104,6 +133,8 @@ void GitTool::run() {
         case Action::AddUser: addUser(); break;
 
         case Action::CheckBranchProtection: checkBranchProtection(); break;
+        case Action::AddBranchProtection: addBranchProtection(); break;
+        case Action::DeleteBranchProtection: deleteBranchProtection(); break;
 
         default: cout << "Unknown action." << endl; break;
     }
@@ -177,7 +208,7 @@ void GitTool::addUser() {
                 }
             }
 
-            server.addUserToRepo(orgName, repo->name, login, permName);
+            server.addUserToRepo(orgName, Server::RepositoryName(repo->name), Server::UserName(login), permName);
         }
     }
 }
@@ -193,4 +224,39 @@ void GitTool::checkBranchProtection() {
     else {
         cout << "Protection:\n" << bp.toJSON().dump(2) << endl;
     }
+}
+
+/**
+ * Apply the changes they've been specifying.
+ */
+void GitTool::addBranchProtection() {
+    if (options.empty()) {
+        cerr << "You specified no options.\n";
+        return;
+    }
+
+    BranchProtection bp = server.getProtection(orgName, repoName, branchName);
+    UpdateBranchProtection ubp ( bp );
+    for (const Option &option: options) {
+        switch (option) {
+            case Option::EnforceAdmins_Set:   ubp.setEnforceAdmins(true); break;
+            case Option::EnforceAdmins_Clear: ubp.setEnforceAdmins(false); break;
+
+            case Option::Allow_Delete_Set:    ubp.setAllowDeletions(true); break;
+            case Option::Allow_Delete_Clear:  ubp.setAllowDeletions(false); break;
+
+            case Option::Require_PullRequests_Set: ubp.getRequiredPullRequestReviews().setApprovingReviewCount(1); break;
+            case Option::Require_PullRequests_Clear: ubp.getRequiredPullRequestReviews().clearAll(); break;
+        }
+    }
+    cout << "Protections should become:\n" << ubp.toJSON().dump(2) << endl;
+
+    server.setProtection(orgName, repoName, branchName, ubp);
+}
+
+/**
+ * If present, delete this branch's protection.
+ */
+void GitTool::deleteBranchProtection() {
+    server.deleteProtection(orgName, repoName, branchName);
 }

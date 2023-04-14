@@ -8,6 +8,10 @@
 #include "Team.h"
 
 namespace GitTools {
+    enum class TriValueBoolean;
+
+    class ExtendedSerializable;
+
     class RequiredStatusChecks;
     class EnforceAdmins;
     class UsersTeamsApps;
@@ -17,32 +21,68 @@ namespace GitTools {
     class EnabledFlag;
     class RequiredSignatures;
     class BranchProtection;
+    class UpdateBranchProtection;
 }
+
+/**
+ * This is basically a boolean that might be unset.
+ */
+enum class GitTools::TriValueBoolean {
+    Unset, False, True
+};
+
+void setJSON(JSON &json, const std::string &key, GitTools::TriValueBoolean value);
+
+GitTools::TriValueBoolean triValueBoolean(bool value);
+
+/**
+ *
+ */
+class GitTools::ExtendedSerializable : public ShowLib::JSONSerializable {
+public:
+    void setJSON_IfSet(JSON &json, const std::string &key, bool nullOnEmpty = false) const;
+
+    bool getIsSet() const { return isSet; }
+    void markSet() { isSet = true; }
+    void markClear() { isSet = false; }
+
+    template <class T>
+    void markIfChanged(const T &oldValue, const T &newValue) {
+        if (oldValue != newValue) {
+            markSet();
+        }
+    }
+
+protected:
+    bool isSet = false;
+};
 
 /**
  * This is a generic flag like "foo": { "enabled": true; }
  * This appears in a few places.
  */
-class GitTools::EnabledFlag: public ShowLib::JSONSerializable {
+class GitTools::EnabledFlag: public ExtendedSerializable {
 public:
     JSON toJSON() const override;
     void fromJSON(const JSON &) override;
 
-    void setJSON_IfSet(JSON &json, const std::string &key) const;
-
     // Getters/setters
-    bool getIsSet() const { return isSet; }
     bool getEnabled() const { return enabled; }
 
-    void setEnabled(bool value) { enabled = value; isSet = true; }
-    void clear() { enabled = false; isSet = false; }
+    // Implicit conversion to boolean.
+    operator bool() const { return enabled; }
+
+    // Implicit conversion to TriValueBoolean.
+    operator TriValueBoolean() const { return triValueBoolean(enabled); }
+
+    void setEnabled(bool value) { enabled = value; markSet(); }
+    void clear() { enabled = false; markClear(); }
 
 protected:
-    bool isSet = false;
     bool enabled = false;
 };
 
-class GitTools::RequiredStatusChecks: public ShowLib::JSONSerializable {
+class GitTools::RequiredStatusChecks: public ExtendedSerializable {
 public:
     typedef std::shared_ptr<RequiredStatusChecks> Pointer;
     typedef ShowLib::JSONSerializableVector<RequiredStatusChecks> Vector;
@@ -62,10 +102,8 @@ public:
 
     JSON toJSON() const override;
     void fromJSON(const JSON &) override;
-    void setJSON_IfSet(JSON &json, const std::string &key) const;
 
 protected:
-    bool enabled = false;
     std::string url;
     std::string contextsURL;
     std::string enforcementLevel;
@@ -77,19 +115,29 @@ protected:
 
 class GitTools::EnforceAdmins: public ShowLib::JSONSerializable {
 public:
+    // Overrides.
     JSON toJSON() const override;
     void fromJSON(const JSON &) override;
+
+    // Getters and setters.
+    const std::string & getURL() const { return url; }
+    bool getEnabled() const { return enabled; }
+
+    // Provide a simple conversion to boolean.
+    operator TriValueBoolean() const { return triValueBoolean(enabled); }
+
+    void enable() { enabled = true; }
+    void disable() { enabled = false; }
 
 protected:
     std::string url;
-    bool enabled;
+    bool enabled = false;
 };
 
-class GitTools::UsersTeamsApps: public ShowLib::JSONSerializable {
+class GitTools::UsersTeamsApps: public ExtendedSerializable {
 public:
     JSON toJSON() const override;
     void fromJSON(const JSON &) override;
-    void setJSON_IfSet(JSON &json, const std::string &key) const;
 
 protected:
     /** This is the list of users with review dismissal access. */
@@ -101,14 +149,12 @@ protected:
     // Apps currently ignored
 };
 
-class GitTools::DismissalRestrictions: public ShowLib::JSONSerializable {
+class GitTools::DismissalRestrictions: public ExtendedSerializable {
 public:
     JSON toJSON() const override;
     void fromJSON(const JSON &) override;
-    void setJSON_IfSet(JSON &json, const std::string &key) const;
 
 protected:
-    bool enabled = false;
     std::string url;
     std::string usersURL;
     std::string teamsURL;
@@ -119,24 +165,44 @@ protected:
 /**
  * This appears to be the list associated with who can do what with pull requests.
  */
-class GitTools::RequiredPullRequestReviews: public ShowLib::JSONSerializable {
+class GitTools::RequiredPullRequestReviews: public ExtendedSerializable {
 public:
     JSON toJSON() const override;
     void fromJSON(const JSON &) override;
-    void setJSON_IfSet(JSON &json, const std::string &key) const;
+
+    // Getters and setters.
+    /** If set, then new commits to the branch will force-expire pending Pull Requests. */
+    bool getDismissStaleReviews() const { return dismissStaleReviews; }
+
+    /** If set, then a designated code owner must review the Pull Request. */
+    bool getRequireCodeOwnerReviews() const { return requireCodeOwnerReviews; }
+
+    /** If set, then the most recent push must be reviewed by someone other than the person who pushed it. */
+    bool getRequireLastPushApproval() const { return requireLastPushApproval; }
+
+    /** This sets the number of approvals required. */
+    int getRequireApprovingReviewCount() const { return requiredApprovingReviewCount; }
+
+    RequiredPullRequestReviews & setDismissStallReviews(bool value) { markIfChanged (value, dismissStaleReviews); dismissStaleReviews = value; return *this; }
+    RequiredPullRequestReviews & setRequireCodeOwnerReviews(bool value) { markIfChanged (value, requireCodeOwnerReviews); requireCodeOwnerReviews = value; return *this; }
+    RequiredPullRequestReviews & setRequireLastPushApproval(bool value) { markIfChanged (value, requireLastPushApproval); requireLastPushApproval = value; return *this; }
+    RequiredPullRequestReviews & setApprovingReviewCount(int value) { markIfChanged (value, requiredApprovingReviewCount); requiredApprovingReviewCount = value; return *this; }
+
+    RequiredPullRequestReviews & clearAll();
 
 protected:
-    bool enabled = false;
     std::string url;
+
+    /** Controls who can dismiss pull request reviews. */
     DismissalRestrictions dismissalRestrictions;
 
     /** This controls who can bypass pull request requirements. */
     UsersTeamsApps bypassPullRequestAllowances;
 
-    bool dismissStaleReviews;
-    bool requireCodeOwnerReviews;
-    int requiredApprovingReviewCount;
-    bool requireLastPushApproval;
+    bool dismissStaleReviews = false;
+    bool requireCodeOwnerReviews = false;
+    int requiredApprovingReviewCount = 0;
+    bool requireLastPushApproval = false;
 };
 
 /**
@@ -157,14 +223,12 @@ protected:
  * This controls who does and does not have access. I might not have this structure
  * correct. It looked like a bunch of users/teams/apps.
  */
-class GitTools::Restrictions: public ShowLib::JSONSerializable {
+class GitTools::Restrictions: public ExtendedSerializable {
 public:
     JSON toJSON() const override;
     void fromJSON(const JSON &) override;
-    void setJSON_IfSet(JSON &json, const std::string &key) const;
 
 protected:
-    bool enabled = false;
     std::string url;
     std::string usersURL;
     std::string teamsURL;
@@ -190,24 +254,50 @@ public:
     JSON toJSON() const override;
     void fromJSON(const JSON &) override;
 
-    // Getters and setters.
+    // Getters and setters. For getters, we have a bunch that are
+    // non-const as you might need to call setters on the resulting objects.
     bool getEnabled() const { return enabled; }
-    const std::string &getUrl() const { return url; }
-    const std::string &getContextsURL() const { return contextsURL; }
-    const std::string &getProtectionURL() const { return protectionURL; }
-    const std::string &getName() const { return name; }
-    const EnforceAdmins &getEnforceAdmins() const { return enforceAdmins; }
-    const RequiredStatusChecks &getRequiredStatusChecks() const { return requiredStatusChecks; }
-    const RequiredPullRequestReviews &getRequiredPullRequestReviews() const { return requiredPullRequestReviews; }
-    const RequiredSignatures &getRequiredSignatures() const { return requiredSignatures; }
-    const Restrictions &getRestrictions() const { return restrictions; }
-    const EnabledFlag &getAllowDeletions() const { return allowDeletions; }
-    const EnabledFlag &getAllowForcePushes() const { return allowForcePushes; }
-    const EnabledFlag &getAllowForkSyncing() const { return allowForkSyncing; }
-    const EnabledFlag &getRequiredLinearHistory() const { return requiredLinearHistory; }
-    const EnabledFlag &getBlockCreations() const { return blockCreations; }
-    const EnabledFlag &getRequiredConversationResolution() const { return requiredConversationResolution; }
-    const EnabledFlag &getLockBranch() const { return lockBranch; }
+
+    const std::string & getUrl() const { return url; }
+    const std::string & getContextsURL() const { return contextsURL; }
+    const std::string & getProtectionURL() const { return protectionURL; }
+    const std::string & getName() const { return name; }
+
+    const EnabledFlag & getAllowDeletions() const { return allowDeletions; }
+    EnabledFlag & getAllowDeletions() { return allowDeletions; }
+
+    const EnabledFlag & getAllowForcePushes() const { return allowForcePushes; }
+    EnabledFlag & getAllowForcePushes() { return allowForcePushes; }
+
+    const EnabledFlag & getAllowForkSyncing() const { return allowForkSyncing; }
+    EnabledFlag & getAllowForkSyncing() { return allowForkSyncing; }
+
+    const EnabledFlag & getBlockCreations() const { return blockCreations; }
+    EnabledFlag & getBlockCreations() { return blockCreations; }
+
+    const EnforceAdmins & getEnforceAdmins() const { return enforceAdmins; }
+    EnforceAdmins & getEnforceAdmins() { return enforceAdmins; }
+
+    const EnabledFlag & getLockBranch() const { return lockBranch; }
+    EnabledFlag & getLockBranch() { return lockBranch; }
+
+    const EnabledFlag & getRequiredConversationResolution() const { return requiredConversationResolution; }
+    EnabledFlag & getRequiredConversationResolution() { return requiredConversationResolution; }
+
+    const EnabledFlag & getRequiredLinearHistory() const { return requiredLinearHistory; }
+    EnabledFlag & getRequiredLinearHistory() { return requiredLinearHistory; }
+
+    const RequiredPullRequestReviews & getRequiredPullRequestReviews() const { return requiredPullRequestReviews; }
+    RequiredPullRequestReviews & getRequiredPullRequestReviews() { return requiredPullRequestReviews; }
+
+    const RequiredSignatures & getRequiredSignatures() const { return requiredSignatures; }
+    RequiredSignatures & getRequiredSignatures() { return requiredSignatures; }
+
+    const RequiredStatusChecks & getRequiredStatusChecks() const { return requiredStatusChecks; }
+    RequiredStatusChecks & getRequiredStatusChecks() { return requiredStatusChecks; }
+
+    const Restrictions & getRestrictions() const { return restrictions; }
+    Restrictions & getRestrictions() { return restrictions; }
 
     BranchProtection & setEnabled(bool value) { enabled = value; return *this; }
     BranchProtection & setUrl(const std::string &value) { url = value; return *this; }
@@ -255,5 +345,66 @@ protected:
 
     /** Is read-only? Default == false. */
     EnabledFlag lockBranch;
+};
 
+class GitTools::UpdateBranchProtection: public ShowLib::JSONSerializable {
+public:
+    JSON toJSON() const override;
+    void fromJSON(const JSON &) override;
+
+    UpdateBranchProtection() = default;
+    UpdateBranchProtection(const BranchProtection &);
+
+    UpdateBranchProtection & operator=(const BranchProtection &);
+
+    bool getAllowDeletions() const { return allowDeletions; }
+
+    const TriValueBoolean & getAllowForcePushes() const { return allowForcePushes; }
+    const TriValueBoolean & getEnforceAdmins() const { return enforceAdmins; }
+
+    bool getAllowForkSyncing() { return allowForkSyncing; }
+    bool getBlockCreations() const { return blockCreations; }
+    bool getLockBranch() { return lockBranch; }
+    bool getRequiredConversationResolution() { return requiredConversationResolution; }
+    bool getRequiredLinearHistory() { return requiredLinearHistory; }
+
+    const RequiredPullRequestReviews & getRequiredPullRequestReviews() const { return requiredPullRequestReviews; }
+    RequiredPullRequestReviews & getRequiredPullRequestReviews() { return requiredPullRequestReviews; }
+
+    const RequiredStatusChecks & getRequiredStatusChecks() const { return requiredStatusChecks; }
+    RequiredStatusChecks & getRequiredStatusChecks() { return requiredStatusChecks; }
+
+    const Restrictions & getRestrictions() const { return restrictions; }
+    Restrictions & getRestrictions() { return restrictions; }
+
+    UpdateBranchProtection & setEnforceAdmins(bool value) { enforceAdmins = value ? TriValueBoolean::True : TriValueBoolean::False; return *this; }
+    UpdateBranchProtection & setAllowForcePushes(bool value) { allowForcePushes = value ? TriValueBoolean::True : TriValueBoolean::False; return *this; }
+
+    UpdateBranchProtection & setRequiredStatusChecks(const RequiredStatusChecks &value) { requiredStatusChecks = value; return *this; }
+    UpdateBranchProtection & setRequiredPullRequestReviews(const RequiredPullRequestReviews &value) { requiredPullRequestReviews = value; return *this; }
+    UpdateBranchProtection & setRestrictions(const Restrictions &value) { restrictions = value; return *this; }
+    UpdateBranchProtection & setAllowDeletions(bool value) { allowDeletions = value; return *this; }
+    UpdateBranchProtection & setAllowForkSyncing(bool value) { allowForkSyncing = value; return *this; }
+    UpdateBranchProtection & setRequiredLinearHistory(bool value) { requiredLinearHistory = value; return *this; }
+    UpdateBranchProtection & setBlockCreations(bool value) { blockCreations = value; return *this; }
+    UpdateBranchProtection & setRequiredConversationResolution(bool value) { requiredConversationResolution = value; return *this; }
+    UpdateBranchProtection & setLockBranch(bool value) { lockBranch = value; return *this; }
+
+protected:
+    // These are required.
+    TriValueBoolean enforceAdmins = TriValueBoolean::Unset;
+    RequiredStatusChecks requiredStatusChecks;
+    RequiredPullRequestReviews requiredPullRequestReviews;
+    Restrictions restrictions;
+
+    // These are boolean or null.
+    TriValueBoolean allowForcePushes = TriValueBoolean::Unset;
+
+    // And these are boolean.
+    bool allowDeletions = false;
+    bool allowForkSyncing = false;
+    bool blockCreations = false;
+    bool lockBranch = false;
+    bool requiredConversationResolution = false;
+    bool requiredLinearHistory = false;
 };
